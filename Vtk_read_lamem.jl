@@ -2,9 +2,9 @@
 Vtk utilities and general plotting tools
 module read_vtk_LaMEM
 =#
+using Conda,PyCall
 
-using PyCall
-vtk     =   pyimport_conda("vtk","vtk")
+vtk     =   pyimport("vtk")
 dsa     =   pyimport("vtk.numpy_interface.dataset_adapter");
 
 struct Files_specification
@@ -112,8 +112,8 @@ function read_pvd_file(Fname)
     return buf;
 end
 
-"
-function _get_coordinate_(fn::Files_specification,2D::Bool==true,x_r::Float64=(0.0,0.0),y_r::Float64=(0.0,0.0),z_r::Float64=(0.0,0.0),istep::In64=0)
+
+function _get_coordinate_(fn::Files_specification,D2::Bool,x_r::Float64,y_r,z_r::Float64,istep::Int64)
     #=
     Read the coordinate of the file. Adjust as a function of the
     fn   : Filespecification type structure
@@ -140,7 +140,7 @@ function _get_coordinate_(fn::Files_specification,2D::Bool==true,x_r::Float64=(0
     ny              =   length(y);
     nz              =   length(z);
 
-    if 2D == true
+    if D2 == true
         if(x_r[2]-x_r[1]>0.0)
             # Find all the nodes within the segment of investigation
             id = findall(x->x>=x_r[1] & x<=x_r[2],x);
@@ -168,15 +168,13 @@ function _get_coordinate_(fn::Files_specification,2D::Bool==true,x_r::Float64=(0
                           nz,        # nz along z
                           ix,        # izoom x
                           (0,0),     # izoom y
-                          iz         # izoom z
-                          );
+                          iz);
 
     else
     #=
     Place holder for the future
     =#
 
- end
+   end
  return buf;
 end
-"
