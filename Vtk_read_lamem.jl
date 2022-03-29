@@ -32,9 +32,10 @@ struct Coord_Model
     nx:: Int64            #number nodes along x
     ny:: Int64            #        ""         y
     nz:: Int64            #        ""         z
-    ix:: Vector{Int32}    # Touple with the ix_beg ix_end
-    iy:: Vector{Int32}
-    iz:: Vector{Int32}
+    ix:: Tuple{Int64,Int64}   # Touple with the ix_beg ix_end
+    iy:: Tuple{Int64,Int64}
+    iz:: Tuple{Int64,Int64}
+    D2:: Bool                 # if true, we are dealing with 2D 
 end
 
 
@@ -113,7 +114,7 @@ function read_pvd_file(Fname)
 end
 
 
-function _get_coordinate_(fn::Files_specification,D2::Bool,x_r::Float64,y_r,z_r::Float64,istep::Int64)
+function _get_coordinate_(fn::Files_specification,OL::Output_list,D2::Bool,x_r::Tuple{Float64, Float64},y_r::Tuple{Float64, Float64},z_r::Tuple{Float64, Float64},istep::Int64)
     #=
     Read the coordinate of the file. Adjust as a function of the
     fn   : Filespecification type structure
@@ -123,7 +124,7 @@ function _get_coordinate_(fn::Files_specification,D2::Bool,x_r::Float64,y_r,z_r:
     z_r  : touple (zmin,zmax) ""
     =#
 
-    fname =  joinpath(fn.path,fn.Test_Name,fn.fLS[1],fn.dyn)
+    fname =  joinpath(fn.path,fn.Test_Name,OL.fLS[istep],fn.name_dyn)
 
     reader  = vtk.vtkXMLPRectilinearGridReader()
     reader.SetFileName(fname)
@@ -135,6 +136,10 @@ function _get_coordinate_(fn::Files_specification,D2::Bool,x_r::Float64,y_r,z_r:
     x               =   data.GetXCoordinates();
     y               =   data.GetYCoordinates();
     z               =   data.GetZCoordinates();
+    x = convert(Array{Float64},x);
+    y = convert(Array{Float64},y);
+    z = convert(Array{Float64},z);
+
 
     nx              =   length(x);
     ny              =   length(y);
@@ -143,7 +148,7 @@ function _get_coordinate_(fn::Files_specification,D2::Bool,x_r::Float64,y_r,z_r:
     if D2 == true
         if(x_r[2]-x_r[1]>0.0)
             # Find all the nodes within the segment of investigation
-            id = findall(x->x>=x_r[1] & x<=x_r[2],x);
+            id = findall(b->(b>=x_r[1] && b<=x_r[2]),x);
             #find the first and last node of the segment
             ix = (id[1],id[end]);
             # update x, nx
@@ -151,8 +156,9 @@ function _get_coordinate_(fn::Files_specification,D2::Bool,x_r::Float64,y_r,z_r:
             nx = length(x);
         end
         if(z_r[2]-z_r[1]>0.0)
+
             # Find all the nodes within the segment of investigation
-            id = findall(x->x>=z_r[1] & x<=z_r[2],z);
+            id = findall(b->(b>=x_r[1] && b<=x_r[2]),z);
             #find the first and last node of the segment
             iz = (id[1],id[end]);
             # update x, nx
@@ -161,14 +167,15 @@ function _get_coordinate_(fn::Files_specification,D2::Bool,x_r::Float64,y_r,z_r:
         end
 
         buf = Coord_Model(x,         # x coordinate
-                          (0.0,0.0), # y coordinate
+                          y,         # y coordinate
                           z,         # z coordinate
                           nx,        # nx along x
                           0,         # ny along y
                           nz,        # nz along z
                           ix,        # izoom x
                           (0,0),     # izoom y
-                          iz);
+                          iz,        # izoom z
+                          D2);       # Dimension
 
     else
     #=
