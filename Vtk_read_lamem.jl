@@ -7,6 +7,9 @@ using Conda,PyCall
 vtk     =   pyimport("vtk")
 dsa     =   pyimport("vtk.numpy_interface.dataset_adapter");
 
+
+
+
 struct Files_specification
     path::String       #the path to the test
     pathS::String     # Path to save the output and database
@@ -38,8 +41,72 @@ struct Coord_Model
     D2:: Bool                 # if true, we are dealing with 2D 
 end
 
+struct Field_Dyn
+    Field:: Vector{String}
+   # SI:: Vector{String}
+    #Cmap::Vector{String}
+end
 
-function Set_up_Fspec(path,path_S,name_pvtr,Test_Name)
+mutable struct DYN2
+    vx:: Array{Float64}     #  Vel vector field (if 2D vel[1(x)2(z)])
+    vz:: Array{Float64}
+    dx:: Array{Float64}   #
+    dz:: Array{Float64}   #
+    τ ::Array{Float64}    # second invariant
+    ϵ:: Array{Float64}     # second invariant
+    τ_xx:: Array{Float64}  # Full tensor (if 2D -> T[1(xx)2(zz)3(xz),:,:])
+    τ_zz:: Array{Float64}  # Full tensor (if 2D -> T[1(xx)2(zz)3(xz),:,:])
+    τ_xz:: Array{Float64}  # Full tensor (if 2D -> T[1(xx)2(zz)3(xz),:,:])  
+    ϵ_xx :: Array{Float64}
+    ϵ_zz :: Array{Float64}
+    ϵ_xz :: Array{Float64}
+    Ψ::Array{Float64}
+    η::Array{Float64}
+    η_creep:: Array{Float64}
+    ρ::Array{Float64}
+    function DYN(b)
+        """
+        Initialize the structure with a random buffer  vector
+        """
+        return new(b, b, b, b, b, b ,b ,b ,b ,b ,b ,b ,b ,b ,b,b)
+    end
+end
+
+
+struct SURF
+    v  :: Array{Float64}   # velocity vector
+    A :: Array{Float64}   # Amplitude
+    T :: Array{Float64}   #Topography 
+    function SURF(b)
+        return new(b,b,b)
+    end
+end
+
+
+function Set_up_Fspec(path::String,path_S::String,name_pvtr::String,Test_Name::String)
+"""
+    f(::String,::String,::String,::String)
+    function that accept as argument the path containing the test, the path where to save the output
+    the name of the .pvd file and the test name 
+    Input: 
+    path::String
+    path_S::String
+    name_pvtr::String
+    Test_Name::String
+    Output: 
+    buf -> Type:: file specification where the path are saved and used 
+    Function: 
+    1) Generate the string containing the file specification (i.e. SDet (pvtr)+_surf.pvts)
+    2) Generate the path where to look for the LaMEM output of a specific Test
+    3) Generate the path where to save the output of the post_processing 
+        3a) If the main save folder is not existing, create
+        3b) If the folder of the test is not existing create
+    Additional note: This script assumes that tests are grouped in projects and tests are performed for a general task
+    i.e. if a user wants to explore the slab detachment perform a set of test that aims to solve this particolar task and each 
+    tests is grouped accordingly. Path_S is the master folder of the group test: in this folder are contained - eventually - the 
+    database of the tests, some picture that compare them, and the folder of each tests where the selected properties are saved in separated 
+    folder
+"""
     Filepvd    =   string(name_pvtr, ".pvd")
     Dyn        =   string(name_pvtr, ".pvtr")
     Surf       =   string(name_pvtr,"_surf" ,".pvtr")
@@ -72,18 +139,18 @@ function Set_up_Fspec(path,path_S,name_pvtr,Test_Name)
     return buf
 end
 
-function read_pvd_file(Fname)
-    #=
-    Function that read the pvd files, and extract the folder that are needed for the post proccesing of the P-T-t path
-    Introducing two regular expression that are not greedy ("?" allows to stop the regular expression at the first occurence of any characters)
-    then opening a the file, then looping over the line of the pvd file to find the occurence.
-    =#
-    "
-    Input: Filename
+function read_pvd_file(Fname::String)
+   
+    """
+    Input: FName ::String
     Output: structure containing Time step, Time vector and total number of time
     steps
     buf = is a temporary buffer
-    "
+    Function: 
+    A) Create a local dictionary, and initialize two empty lists
+    B) Read pvd file and collect: 1) Folder 2) Time 3) Total amount of folder
+    C) Save in the data type Output_list
+    """
     timestep_rgx = r"file=\".+?\/"
     time_rgx           = r"timestep=\".+?\""
     folder_list    = String[];
@@ -102,12 +169,10 @@ function read_pvd_file(Fname)
             append!(time,parse(Float64,Time_s));
             push!(folder_list,f_s);
             counter += 1;
-            println(counter);
         end
 
     end
 
-    println("The total amount of timestep is $counter /n")
     close(f)
     buf = Output_list(folder_list,time,counter)
     return buf;
@@ -115,14 +180,32 @@ end
 
 
 function _get_coordinate_(fn::Files_specification,OL::Output_list,D2::Bool,x_r::Tuple{Float64, Float64},y_r::Tuple{Float64, Float64},z_r::Tuple{Float64, Float64},istep::Int64)
-    #=
-    Read the coordinate of the file. Adjust as a function of the
-    fn   : Filespecification type structure
-    2D   : bool (2D or 3D numerical experiment)
-    x_r  : touple (xmin,xmax) if -> (0.0,0.0) No bounds
-    y_r  : touple (ymin,ymax) ""
-    z_r  : touple (zmin,zmax) ""
-    =#
+   
+    """
+    f(fn,OL,D2,x_r,y_r,z_r,istep)
+    Input
+    fn ::File_specification  Information of the test
+    OL :: Output_list        List of output 
+    D2 ::Bool                Flag 2D or 3D 
+    x_r :: Touple            zoom: -> delimiting area along x (y,z) to plot or do the post processing 
+    .                        zoom:
+    .                        zoom:
+    istep ::Int64
+    Output
+    buf -> Coord_Model Data type (structure) Containing all the information related to the grid 
+    Function: 
+    A) Create the path to look for the file 
+    B) Invoke the vtk utilities
+    C) read the coordinates
+    -> if 2D 
+       select x-z direction
+       if exist touple containing zoom
+        ->create the new array 
+        ->save the node where they start 
+        ->update number of element
+    D) Fill up the structure
+    """
+
 
     fname =  joinpath(fn.path,fn.Test_Name,OL.fLS[istep],fn.name_dyn)
 
@@ -153,24 +236,22 @@ function _get_coordinate_(fn::Files_specification,OL::Output_list,D2::Bool,x_r::
             ix = (id[1],id[end]);
             # update x, nx
             x  = x[id];
-            nx = length(x);
         end
         if(z_r[2]-z_r[1]>0.0)
 
             # Find all the nodes within the segment of investigation
-            id = findall(b->(b>=x_r[1] && b<=x_r[2]),z);
+            id = findall(b->(b>=z_r[1] && b<=z_r[2]),z);
             #find the first and last node of the segment
             iz = (id[1],id[end]);
             # update x, nx
             z  = z[id];
-            nz = length(x);
         end
 
         buf = Coord_Model(x,         # x coordinate
                           y,         # y coordinate
                           z,         # z coordinate
                           nx,        # nx along x
-                          0,         # ny along y
+                          ny,         # ny along y
                           nz,        # nz along z
                           ix,        # izoom x
                           (0,0),     # izoom y
@@ -184,4 +265,42 @@ function _get_coordinate_(fn::Files_specification,OL::Output_list,D2::Bool,x_r::
 
    end
  return buf;
+end
+
+
+function _update_DYN!(D::DYN,fn::Files_specification,OL::Output_list,c::Coord_Model,istep::Int64,F::Field)
+
+
+    dictionary = Dict("density"=>("ρ",1), "visc_creep"=>("η_creep",1), "velocity"=>(["vx","vy","vz"],3))
+
+    fname =  joinpath(fn.path,fn.Test_Name,OL.fLS[istep],fn.name_dyn)
+
+    reader  = vtk.vtkXMLPRectilinearGridReader()
+    reader.SetFileName(fname)
+    reader.Update()
+    data    = reader.GetOutput()
+    
+    is = length(F_.Field)
+    for s=1:is 
+        buf      =   data.GetPointData().GetArray(is);
+        _shape_array!(buf,c)
+    
+    
+    
+    
+    end
+
+end
+function _shape_array!(b,c::Coord_Model)
+
+    b    = reshape(b,c.nz,c.ny,c.nx)
+    if c.D2 == true
+
+
+
+    else
+        #place holder
+    end
+
+
 end
