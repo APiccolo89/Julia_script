@@ -43,11 +43,11 @@ end
 
 struct Field_Dyn
     Field:: Vector{String}
-   # SI:: Vector{String}
+    DIC :: Dict 
     #Cmap::Vector{String}
 end
 
-mutable struct DYN2
+mutable struct DYN
     vx:: Array{Float64}     #  Vel vector field (if 2D vel[1(x)2(z)])
     vz:: Array{Float64}
     dx:: Array{Float64}   #
@@ -64,11 +64,15 @@ mutable struct DYN2
     η::Array{Float64}
     η_creep:: Array{Float64}
     ρ::Array{Float64}
+    Oₚ::Array{Float64}
+    C₁::Array{Float64}
+    C₂::Array{Float64}
+    Cont::Array{Float64}
     function DYN(b)
         """
         Initialize the structure with a random buffer  vector
         """
-        return new(b, b, b, b, b, b ,b ,b ,b ,b ,b ,b ,b ,b ,b,b)
+        return new(b, b, b, b, b, b ,b ,b ,b ,b ,b ,b ,b ,b ,b, b, b, b, b, b)
     end
 end
 
@@ -179,7 +183,7 @@ function read_pvd_file(Fname::String)
 end
 
 
-function _get_coordinate_(fn::Files_specification,OL::Output_list,D2::Bool,x_r::Tuple{Float64, Float64},y_r::Tuple{Float64, Float64},z_r::Tuple{Float64, Float64},istep::Int64)
+function _get_coordinate_(Fsp::Files_specification,OL::Output_list,D2::Bool,x_r::Tuple{Float64, Float64},y_r::Tuple{Float64, Float64},z_r::Tuple{Float64, Float64},istep::Int64)
    
     """
     f(fn,OL,D2,x_r,y_r,z_r,istep)
@@ -207,7 +211,7 @@ function _get_coordinate_(fn::Files_specification,OL::Output_list,D2::Bool,x_r::
     """
 
 
-    fname =  joinpath(fn.path,fn.Test_Name,OL.fLS[istep],fn.name_dyn)
+    fname =  joinpath(Fsp.path,Fsp.Test_Name,OL.fLS[istep],Fsp.name_dyn)
 
     reader  = vtk.vtkXMLPRectilinearGridReader()
     reader.SetFileName(fname)
@@ -268,39 +272,81 @@ function _get_coordinate_(fn::Files_specification,OL::Output_list,D2::Bool,x_r::
 end
 
 
-function _update_DYN!(D::DYN,fn::Files_specification,OL::Output_list,c::Coord_Model,istep::Int64,F::Field)
+function _update_DYN!(D::DYN,Fsp::Files_specification,OL::Output_list,C::Coord_Model,istep::Int64,F_d::Field_Dyn)
 
-
-    dictionary = Dict("density"=>("ρ",1), "visc_creep"=>("η_creep",1), "velocity"=>(["vx","vy","vz"],3))
-
-    fname =  joinpath(fn.path,fn.Test_Name,OL.fLS[istep],fn.name_dyn)
+    fname =  joinpath(Fsp.path,Fsp.Test_Name,OL.fLS[istep],Fsp.name_dyn)
 
     reader  = vtk.vtkXMLPRectilinearGridReader()
     reader.SetFileName(fname)
     reader.Update()
     data    = reader.GetOutput()
     
-    is = length(F_.Field)
+    is = length(F_d.Field)
     for s=1:is 
-        buf      =   data.GetPointData().GetArray(is);
-        _shape_array!(buf,c)
-    
-    
-    
+        information = F_d.DIC[F_d.Field[s]]
+        print(F_d.Field[s])
+        
+        buf      =   data.GetPointData().GetArray(F_d.Field[s]);
+        b=_shape_array(buf,C,information);
+        b      =  convert(Array{Float64},b);
+
+        if information[2] == 3
+            setfield!(D,Symbol(information[1]),b[1,:,:]);
+            setfield!(D,Symbol(information[1]),b[2,:,:]);
+        elseif information[2] == 9
+            setfield!(D,Symbol(information[1]),b[1,:,:]);
+            setfield!(D,Symbol(information[1]),b[3,:,:]);
+            setfield!(D,Symbol(information[1]),b[2,:,:]);
+        else
+            setfield!(D,Symbol(information[1]),b);
+            print(getfield(D,Symbol(information[1]))[:,50])
+        end
     
     end
 
 end
-function _shape_array!(b,c::Coord_Model)
-
-    b    = reshape(b,c.nz,c.ny,c.nx)
-    if c.D2 == true
 
 
 
-    else
-        #place holder
+function _shape_array(buf,C::Coord_Model,information)
+    if information[2]>1
+        nco = (information[2])
+        if C.D2==true && nco==9
+            b = Array{Float32}(undef,3,length(C.z),length(C.x));
+
+        elseif C.D2==true && nco==3
+            b = Array{Float32}(undef,2,length(C.z),length(C.x));
+
+        end
+
+        for i = 1:nco
+            buf1 = buf[:,i];
+            buf1 = reshape(buf1,C.nz,C.ny,C.nx);
+            if C.D2 == true 
+                buf1 = buf1[:,1,:];
+            end
+            if i == 1 
+                b[1,:,:] = buf1[C.iz[1]:C.iz[2],C.ix[1]:C.ix[2]];
+            elseif i == 3
+                b[2,:,:] = buf1[C.iz[1]:C.iz[2],C.ix[1]:C.ix[2]];
+            elseif i == 9
+                b[3,:,:] = buf1[C.iz[1]:C.iz[2],C.ix[1]:C.ix[2]];
+
+            end
+        end
+        return b ;
+    else 
+        b    = reshape(buf,C.nz,C.ny,C.nx);
+        
+
+        if C.D2 == true
+            b = b[:,1,:];
+            b = b[C.iz[1]:C.iz[2],C.ix[1]:C.ix[2]];
+           
+
+            return b;
+            #place holder
+        end
     end
-
 
 end
