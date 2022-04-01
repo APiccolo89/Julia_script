@@ -2,7 +2,7 @@
 Vtk utilities and general plotting tools
 module read_vtk_LaMEM
 =#
-using Conda,PyCall
+using Conda,PyCall,Plots,Printf,LinearAlgebra
 
 vtk     =   pyimport("vtk")
 dsa     =   pyimport("vtk.numpy_interface.dataset_adapter");
@@ -226,7 +226,7 @@ function _get_coordinate_(Fsp::Files_specification,OL::Output_list,D2::Bool,x_r:
     x = convert(Array{Float64},x);
     y = convert(Array{Float64},y);
     z = convert(Array{Float64},z);
-
+    print(z)
 
     nx              =   length(x);
     ny              =   length(y);
@@ -283,23 +283,20 @@ function _update_DYN!(D::DYN,Fsp::Files_specification,OL::Output_list,C::Coord_M
     
     is = length(F_d.Field)
     for s=1:is 
-        information = F_d.DIC[F_d.Field[s]]
-        print(F_d.Field[s])
-        
+        information = F_d.DIC[F_d.Field[s]]        
         buf      =   data.GetPointData().GetArray(F_d.Field[s]);
         b=_shape_array(buf,C,information);
         b      =  convert(Array{Float64},b);
 
         if information[2] == 3
-            setfield!(D,Symbol(information[1]),b[1,:,:]);
-            setfield!(D,Symbol(information[1]),b[2,:,:]);
+            setfield!(D,Symbol(information[1][1]),b[1,:,:]);
+            setfield!(D,Symbol(information[1][2]),b[2,:,:]);
         elseif information[2] == 9
-            setfield!(D,Symbol(information[1]),b[1,:,:]);
-            setfield!(D,Symbol(information[1]),b[3,:,:]);
-            setfield!(D,Symbol(information[1]),b[2,:,:]);
+            setfield!(D,Symbol(information[1][1]),b[1,:,:]);
+            setfield!(D,Symbol(information[1][2]),b[3,:,:]);
+            setfield!(D,Symbol(information[1][3]),b[2,:,:]);
         else
             setfield!(D,Symbol(information[1]),b);
-            print(getfield(D,Symbol(information[1]))[:,50])
         end
     
     end
@@ -312,41 +309,62 @@ function _shape_array(buf,C::Coord_Model,information)
     if information[2]>1
         nco = (information[2])
         if C.D2==true && nco==9
-            b = Array{Float32}(undef,3,length(C.z),length(C.x));
+            b = Array{Float32}(undef,3,length(C.x),length(C.z));
 
         elseif C.D2==true && nco==3
-            b = Array{Float32}(undef,2,length(C.z),length(C.x));
+            b = Array{Float32}(undef,2,length(C.x),length(C.z));
 
         end
 
         for i = 1:nco
             buf1 = buf[:,i];
-            buf1 = reshape(buf1,C.nz,C.ny,C.nx);
+            buf1 = reshape(buf1,(C.nx,C.ny,C.nz));
             if C.D2 == true 
                 buf1 = buf1[:,1,:];
             end
             if i == 1 
-                b[1,:,:] = buf1[C.iz[1]:C.iz[2],C.ix[1]:C.ix[2]];
+                b[1,:,:] = buf1[C.ix[1]:C.ix[2],C.iz[1]:C.iz[2]];
             elseif i == 3
-                b[2,:,:] = buf1[C.iz[1]:C.iz[2],C.ix[1]:C.ix[2]];
+                b[2,:,:] = buf1[C.ix[1]:C.ix[2],C.iz[1]:C.iz[2]];
             elseif i == 9
-                b[3,:,:] = buf1[C.iz[1]:C.iz[2],C.ix[1]:C.ix[2]];
+                b[3,:,:] = buf1[C.ix[1]:C.ix[2],C.iz[1]:C.iz[2]];
 
             end
         end
         return b ;
     else 
-        b    = reshape(buf,C.nz,C.ny,C.nx);
+        b    = reshape(buf,(C.nx,C.ny,C.nz));
         
 
         if C.D2 == true
             b = b[:,1,:];
-            b = b[C.iz[1]:C.iz[2],C.ix[1]:C.ix[2]];
+            print(size(b))
+            b = b[C.ix[1]:C.ix[2],C.iz[1]:C.iz[2]];
+            print(b[end,200])
            
 
             return b;
             #place holder
         end
     end
+
+end
+
+
+
+function plot_grid_properties(D::DYN,Fsp::Files_specification,C::Coord_Model,field::Symbol,title::String,F::String,istep::Int64)
+
+    fs = joinpath(Fsp.pathST,F)
+
+    if isdir(fs) == false
+        mkdir(fs)
+    end
+    F = string(F,string(istep),".png")
+    fn = joinpath(fs,F)
+    pa = heatmap(C.x,C.z,transpose(getfield(D,field)),xlabel = "x, [km]",ylabel ="z, [km]",cmap =:turbid,dpi=300);
+    title! = "$field $fs.time[istep] [Myrs]"
+    savefig(fn);
+
+
 
 end

@@ -19,39 +19,37 @@ F_sl  (Slab properties and relative dictionary)
 include("Vtk_read_lamem.jl")
 include("Slab_D_Functions.jl")
 
-
-main()
-C,D,F_d,Fsp,OL = initialize_test(); 
-_Test_Loop_Output(C,D,F_d,Fsp,OL)
-
-
-
+function script()
+    C,D,F_d,Fsp,OL = initialize_test(); 
+    @time _Test_Loop_Output(C,D,F_d,Fsp,OL)
+end
 
 function _Test_Loop_Output(C::Coord_Model,D::DYN,F_d::Field_Dyn,Fsp::Files_specification,OL::Output_list)
-"""
-Input: 
-C -> Coordinate of the test, Coord_model
-D -> DYN Fields
-F-> Fields 
-FSpec ->Specification file
-Tstep -> Output list
-Output: 
--> strcture with relevant data (place holder)
+    """
+    Input: 
+    C -> Coordinate of the test, Coord_model
+    D -> DYN Fields
+    F-> Fields 
+    FSpec ->Specification file
+    Tstep -> Output list
+    Output: 
+    -> strcture with relevant data (place holder)
 
-Function: 
-a) -> loop over the time step
-b) -> Update the structure Surf, Dyn, and X 
-c) -> Collect relevant data 
-d) -> Update relevant data 
-e) -> plot 
-"""
-for it=1:OL.nTs
-    _update_DYN!(D,Fsp,OL,C,it,F_d)
+    Function: 
+    a) -> loop over the time step
+    b) -> Update the structure Surf, Dyn, and X 
+    c) -> Collect relevant data 
+    d) -> Update relevant data 
+    e) -> plot 
+    """
+    for it=1:OL.nTs
+      @time _update_DYN!(D,Fsp,OL,C,it,F_d)
+
+      @time plot_grid_properties(D,Fsp,C,Symbol("Oₚ")," Oplate[ ]","Oplate",it);
 
 
 
-
-end
+    end
 
 
 
@@ -75,8 +73,8 @@ function initialize_test()
             "_Oceanic_Lit_ [ ]",
             "_Continental_Crust_ [ ]"]
 
-    dictionary = Dict("density [kg/m^3]"=>("ρ",1), 
-                       "visc_creep [Pa*s]"=>("η_creep",1),
+    dictionary = Dict("density [kg/m^3]"=>("ρ",1,"rho"), 
+                       "visc_creep [Pa*s]"=>("η_creep",1,),
                        "velocity [cm/yr]"=>(["vx","vz"],3),
                        "dev_stress [MPa]"=>(["τ_xx","τ_zz","τ_xz"],9),
                        "strain_rate [1/s]"=>(["ϵ_xx","ϵ_zz","ϵ_xz"],9),
@@ -90,16 +88,26 @@ function initialize_test()
                        )
 
     F_d = Field_Dyn(Field,dictionary)        
-    path       = "/mnt/c/Users/Andrea Piccolo/Desktop"
+    path       = "/mnt/c/Users/Andrea Piccolo/Dropbox/Bayreuth_Marcel"
     path_S     = "/mnt/c/Users/Andrea Piccolo/Dropbox/Bayreuth_Marcel/Tests"
-    Test_Name  = "T_I0_VA18_V21_LM1_NE_FS"
+    Test_Name  = "X2_VA19_LM20_Va2_T1"
     name_pvtr  = "SDet"
     Fsp      = Set_up_Fspec(path,path_S,name_pvtr,Test_Name);
     OL      = read_pvd_file(Fsp.file_pvd);
     #Find elegant and beauty way to do it
-    C= _get_coordinate_(Fsp,OL,true,(-400.0,400.0),(0.0,0.0),(-400.0,0.0),1);
-    D = DYN(Array{Float64}(undef,length(C.z),length(C.x)));
+    C= _get_coordinate_(Fsp,OL,true,(-400.0,400.0),(0.0,0.0),(-400.0,20.0),1);
+    D = DYN(Array{Float64}(undef,length(C.x),length(C.z)));
 
     return C,D,F_d,Fsp,OL;
 
 end
+
+
+
+
+
+# Run the post processing script 
+script()
+
+
+
