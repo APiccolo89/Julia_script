@@ -2,7 +2,7 @@
 Vtk utilities and general plotting tools
 module read_vtk_LaMEM
 =#
-using Conda,PyCall,Plots,Printf,LinearAlgebra, PyPlot,Distributions
+using Conda,PyCall,Plots,Printf,LinearAlgebra, PyPlot
 
 vtk     =   pyimport("vtk")
 dsa     =   pyimport("vtk.numpy_interface.dataset_adapter");
