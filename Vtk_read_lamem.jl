@@ -2,11 +2,10 @@
 Vtk utilities and general plotting tools
 module read_vtk_LaMEM
 =#
-using Conda,PyCall,Plots,Printf,LinearAlgebra
+using Conda,PyCall,Plots,Printf,LinearAlgebra, PyPlot,Distributions
 
 vtk     =   pyimport("vtk")
 dsa     =   pyimport("vtk.numpy_interface.dataset_adapter");
-
 
 
 
@@ -210,7 +209,6 @@ function _get_coordinate_(Fsp::Files_specification,OL::Output_list,D2::Bool,x_r:
     D) Fill up the structure
     """
 
-
     fname =  joinpath(Fsp.path,Fsp.Test_Name,OL.fLS[istep],Fsp.name_dyn)
 
     reader  = vtk.vtkXMLPRectilinearGridReader()
@@ -226,8 +224,6 @@ function _get_coordinate_(Fsp::Files_specification,OL::Output_list,D2::Bool,x_r:
     x = convert(Array{Float64},x);
     y = convert(Array{Float64},y);
     z = convert(Array{Float64},z);
-    print(z)
-
     nx              =   length(x);
     ny              =   length(y);
     nz              =   length(z);
@@ -240,6 +236,8 @@ function _get_coordinate_(Fsp::Files_specification,OL::Output_list,D2::Bool,x_r:
             ix = (id[1],id[end]);
             # update x, nx
             x  = x[id];
+        else
+            ix = (1,length(x))
         end
         if(z_r[2]-z_r[1]>0.0)
 
@@ -249,6 +247,8 @@ function _get_coordinate_(Fsp::Files_specification,OL::Output_list,D2::Bool,x_r:
             iz = (id[1],id[end]);
             # update x, nx
             z  = z[id];
+        else
+            iz = (1,length(z))
         end
 
         buf = Coord_Model(x,         # x coordinate
@@ -303,8 +303,6 @@ function _update_DYN!(D::DYN,Fsp::Files_specification,OL::Output_list,C::Coord_M
 
 end
 
-
-
 function _shape_array(buf,C::Coord_Model,information)
     if information[2]>1
         nco = (information[2])
@@ -334,15 +332,9 @@ function _shape_array(buf,C::Coord_Model,information)
         return b ;
     else 
         b    = reshape(buf,(C.nx,C.ny,C.nz));
-        
-
         if C.D2 == true
             b = b[:,1,:];
-            print(size(b))
             b = b[C.ix[1]:C.ix[2],C.iz[1]:C.iz[2]];
-            print(b[end,200])
-           
-
             return b;
             #place holder
         end
@@ -352,19 +344,19 @@ end
 
 
 
-function plot_grid_properties(D::DYN,Fsp::Files_specification,C::Coord_Model,field::Symbol,title::String,F::String,istep::Int64)
+function plot_grid_properties(D::DYN,Fsp::Files_specification,C::Coord_Model,field::Symbol,title::String,F::String,istep::Int64,OL::Output_list)
 
     fs = joinpath(Fsp.pathST,F)
-
+    time = OL.time[istep]
+    val = transpose(getfield(D,field))
+    if log==true
+        val = log10(val)
+    end
     if isdir(fs) == false
         mkdir(fs)
     end
-    F = string(F,string(istep),".png")
-    fn = joinpath(fs,F)
-    pa = heatmap(C.x,C.z,transpose(getfield(D,field)),xlabel = "x, [km]",ylabel ="z, [km]",cmap =:turbid,dpi=300);
-    title! = "$field $fs.time[istep] [Myrs]"
-    savefig(fn);
+    # Contour the main unit 
 
-
+    #
 
 end

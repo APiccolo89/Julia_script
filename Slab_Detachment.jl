@@ -45,15 +45,8 @@ function _Test_Loop_Output(C::Coord_Model,D::DYN,F_d::Field_Dyn,Fsp::Files_speci
     for it=1:OL.nTs
       @time _update_DYN!(D,Fsp,OL,C,it,F_d)
 
-      @time plot_grid_properties(D,Fsp,C,Symbol("Oₚ")," Oplate[ ]","Oplate",it);
-
-
-
+      @time plot_grid_properties(D,Fsp,C,Symbol("Oₚ")," Oplate[ ]","Oplate",it,OL);
     end
-
-
-
-
 end
 
 
@@ -88,9 +81,9 @@ function initialize_test()
                        )
 
     F_d = Field_Dyn(Field,dictionary)        
-    path       = "/mnt/c/Users/Andrea Piccolo/Dropbox/Bayreuth_Marcel"
+    path       = "/mnt/c/Users/Andrea Piccolo/Desktop"
     path_S     = "/mnt/c/Users/Andrea Piccolo/Dropbox/Bayreuth_Marcel/Tests"
-    Test_Name  = "X2_VA19_LM20_Va2_T1"
+    Test_Name  = "T_I0_VA19_V22_LM1_NE"
     name_pvtr  = "SDet"
     Fsp      = Set_up_Fspec(path,path_S,name_pvtr,Test_Name);
     OL      = read_pvd_file(Fsp.file_pvd);
