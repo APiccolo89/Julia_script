@@ -2,7 +2,7 @@
 Vtk utilities and general plotting tools
 module read_vtk_LaMEM
 =#
-using Conda,PyCall,Plots,Printf,LinearAlgebra, PyPlot
+using Conda,PyCall,Plots,Printf,LinearAlgebra,ColorSchemes,PerceptualColourMaps
 
 vtk     =   pyimport("vtk")
 dsa     =   pyimport("vtk.numpy_interface.dataset_adapter");
@@ -344,19 +344,21 @@ end
 
 
 
-function plot_grid_properties(D::DYN,Fsp::Files_specification,C::Coord_Model,field::Symbol,title::String,F::String,istep::Int64,OL::Output_list)
+function plot_grid_properties(D::DYN,Fsp::Files_specification,C::Coord_Model,field::Symbol,title::String,F::String,istep::Int64,OL::Output_list,log::Bool,cmap::Symbol)
 
     fs = joinpath(Fsp.pathST,F)
     time = OL.time[istep]
     val = transpose(getfield(D,field))
     if log==true
-        val = log10(val)
+        val = log10.(val)
     end
     if isdir(fs) == false
         mkdir(fs)
     end
     # Contour the main unit 
-
-    #
+    fn = "Fig$istep.png"
+    fn = joinpath(fs,fn)
+    p1          =   heatmap(C.x, C.z, val,c=cmap, xlabel="Width [km]",ylabel="Depth [km]", title="$(round(time, digits=2)) Myrs", dpi=200, fontsize=6, colorbar_title=title)    #
+    savefig(p1,fn)
 
 end

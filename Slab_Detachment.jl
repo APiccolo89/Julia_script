@@ -45,7 +45,11 @@ function _Test_Loop_Output(C::Coord_Model,D::DYN,F_d::Field_Dyn,Fsp::Files_speci
     for it=1:OL.nTs
       @time _update_DYN!(D,Fsp,OL,C,it,F_d)
 
-      @time plot_grid_properties(D,Fsp,C,Symbol("Oₚ")," Oplate[ ]","Oplate",it,OL);
+      plot_grid_properties(D,Fsp,C,Symbol("Oₚ")," Oplate[ ]","Oplate",it,OL,false,Symbol("batlow"));
+      plot_grid_properties(D,Fsp,C,Symbol("τ")," τ [MPa]","SecondStress",it,OL,false,Symbol("batlow"));
+      plot_grid_properties(D,Fsp,C,Symbol("ϵ")," ϵ [1/s]","SecondStrain",it,OL,true,Symbol("batlow"));
+      plot_grid_properties(D,Fsp,C,Symbol("ρ")," ρ [kg/m3]","Density",it,OL,false,Symbol("nuuk"));
+
     end
 end
 
