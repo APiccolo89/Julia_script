@@ -1,22 +1,57 @@
 """
 LaMEM generation setup 
-Structure -> Grid 
-Structure -> Timestepping 
-Structure -> Free Surface
-Structure -> Controls
-Structure -> Visualisation
-Structure -> Phase 
-Structure -> Marker
-Structure -> Solver Options (basic)
-File structure 
-File function (print .dat file)
-flag 2 not printing none, -max(Float/Int)
+Main goal: creating a simple julia script that produces .dat file for LaMEM, producing additional plot 
+and table related to the initial setup
+"""
 
+using Parameters
+
+
+"""
+Abstract type Material Parameters
+-> Material
+a) Density   -> constant -> thermal -> pressure -> thermal-pressure ->compressible ->Phase diagram 
+b) rheology   ->Elastic  -> Viscous                           ->Plastic
+                                ->linear                            -> Drucker-Prager
+                                    -> Diffusion creep              -> Constant tau yield 
+                                    -> Newtonian s.s. 
+                                ->non linear
+                                    -> Power-law 
+                                    -> Dislocation creep
+                                    -> Peirl Creep 
+c) Thermal -> Basic_Thermal -> Temperature-Dependent Conductivity
 
 
 """
 
-using Parameters
+abstract type Material end 
+# 2nd Level 
+abstract type Density <: Material end 
+abstract type Rheology <:Material end 
+abstract type Thermal <: Material end 
+abstract type Diking <: Material end 
+abstract type Weakening <: Material end
+# 3rd level
+# Density  
+abstract type Constant_den <: Density end 
+abstract type Thermal_den <: Density end
+abstract type Thermal_Pres_den <: Density end
+abstract type Phase_Diagram_den <: Density end 
+abstract type Compressibility_den <: Density end 
+# Rheology 
+abstract type Elastic <: Rheology end
+abstract type Viscous <: Rheology end
+abstract type Plastic <: Rheology end
+# Thermal 
+abstract type Basic_Thermal <: Thermal end
+abstract type T_P_Conductivity <: Thermal end
+# 4th level 
+abstract type Linear <: Viscous end
+abstract type Non_linear <: Viscous end 
+abstract type Diffusion_Creep <: Viscous end
+abstract type Dislocation_Creep <: Viscous end 
+abstract type Peirls_Creep <: Viscous end 
+
 
 
 @with_kw struct Scaling
@@ -42,7 +77,7 @@ end
 	CFLMAX ::Float64   = 0.8      # CFL criterion for elasticity
 	nstep_max::Int32 = 50         # maximum allowed number of steps (lower bound: time_end/dt_max)
 	nstep_out::Int32 = 1           # save output every n steps
-	nstep_ini::Int32 = -max_value(Int32)     # save output for n initial steps
+	nstep_ini::Int32 = -typemax(Int32)     # save output for n initial steps
 	nstep_rdb::Int32 = 10         # save restart database every n steps
 	time_tol::Float64  = 1e-8      # relative tolerance for time comparisons
     
@@ -124,13 +159,13 @@ end
 	min_cohes ::Float64              = 2e7            # cohesion lower bound  [Pa]
 	min_fric  ::Float64              = 5.0            # friction lower bound  [degree]
 	tau_ult  ::Float64               = 1e9            # ultimate yield stress [Pa]
-	rho_fluid ::Float64              = -max(Float64)            # fluid density for depth-dependent density model
+	rho_fluid ::Float64              = -typemax(Float64)            # fluid density for depth-dependent density model
 	gw_level_type::String            = "none"            # ground water level type for pore pressure computation (see below)
-	gw_level ::Float64               = -max(Float64)           # ground water level at the free surface (if defined)
-	biot      ::Float64              = -max(Float64)            # Biot pressure parameter
+	gw_level ::Float64               = -typemax(Float64)           # ground water level at the free surface (if defined)
+	biot      ::Float64              = -typemax(Float64)            # Biot pressure parameter
 	get_permea::Int32                = 0              # effective permeability computation activation flag
 	rescal::Int32                    = 0             # stencil rescaling flag (for internal constraints, for example while computing permeability)
-	mfmax::Float64                   = -max(Float64)            # maximum melt fraction affecting viscosity reduction
+	mfmax::Float64                   = -typemax(Float64)            # maximum melt fraction affecting viscosity reduction
 	lmaxit::Int32                    = 25             # maximum number of local rheology iterations 
 	lrtol::Float64                   = 1e-6           # local rheology iterations relative tolerance
 	act_dike::Int32                  = 0              # dike activation flag (additonal term in divergence)
@@ -147,8 +182,8 @@ end
     open_bot_bound::Int32 = 0
     permeable_phase_inflow::Int32 = 1 # Phase of the inflow material from the bottom (The temperature of the inflow phase it is the same of the bottom boundary)
     noslip::Array{Int32} = [0 0 0 0 0 0]
-    fix_phase::Int32 = -max(Int32)
-    fix_cell::Int32 = -max(Int32)
+    fix_phase::Int32 = -typemax(Int32)
+    fix_cell::Int32 = -typemax(Int32)
     fix_cell_file::String = "none" 
     temp_top::Float64               =   0.0
     temp_bot::Float64                =   1300.0                              # if only one value is given, it is assumed to be constant with time
@@ -159,6 +194,9 @@ end
 	pres_bot::Float64 = 10.0
 	init_pres::Int32  = 1
 end
+#######################################################
+# Markers 
+######################################################
 
 @kw_args struct Markers 
     msetup::String  = "geom"            # setup type
@@ -180,6 +218,14 @@ end
 	nmark_lim ::Array{Int32}     = [10 100]            # min/max number per cell (marker control)
 	nmark_avd ::Array{Int32}      = [3 3 3]             # x-y-z AVD refinement factors (avd marker control)
 	nmark_sub ::Array{Int32}      = 1                 # max number of same phase markers per subcell (subgrid marker control)
+end
+
+@with_kw struct Passive_Tracers
+    Passive_Tracer::Int32             = 1                               # Activate passive tracers?
+    PassiveTracer_Box::Array{Float64}           =  [-600 600 -1 1 -300 -50]         # Dimensions of Box in which we disttribute passive tracers  
+    PassiveTracer_Resolution::Array{Int32}  =  [100 1 100]                      # The number of passive tracers in every direction
+    PassiveTracer_ActiveType::String    =  "Always"                  		  # Under which condition are they activated? []  
+    PassiveTracer_ActiveValue::Float64   =  0.1                            # When this value is exceeded the tracers are being activated 
 end
 
 ####################################################################
@@ -250,6 +296,78 @@ end
 	topTemp::Float64    = 0         # required in case of [linear,halfspace]: temperature @ top [in Celcius in case of GEO units]
 	botTemp::Float64     = 1300      # required in case of [linear,halfspace]: temperature @ bottom [in Celcius in case of GEO units]
 	thermalAge::Float64  = 70        # required in case of [halfspace]: thermal age of lithosphere [in Myrs if GEO units are used]
+end
+
+
+############################################################################################
+#  Output Structures
+############################################################################################
+
+@kw_args struct Grid_Output
+    out_file_name::String       = "output" # output file name
+    out_pvd::Int32             = 0      # activate writing .pvd file
+    out_phase::Int32           = 0
+    out_density::Int32        = 0
+    out_visc_total::Int32     = 0
+    out_visc_creep::Int32      = 0
+    out_velocity::Int32        = 0
+    out_pressure::Int32        = 0
+    out_tot_press::Int32       = 0
+    out_eff_press::Int32       = 0
+    out_over_press::Int32      = 0
+    out_litho_press::Int32     = 0
+    out_pore_pres::Int32s      = 0
+    out_temperature::Int32     = 0
+    out_dev_stress::Int32      = 0
+    out_j2_dev_stress::Int32   = 0
+    out_strain_rate::Int32     = 0
+    out_j2_strain_rate::Int32  = 0
+    out_shmax ::Int32          = 0
+    out_ehmax ::Int32          = 0
+    out_yield ::Int32          = 0
+    out_rel_dif_rate::Int32    = 0     # relative proportion of diffusion creep strainrate
+    out_rel_dis_rate::Int32    = 0     # relative proportion of dislocation creep strainrate
+    out_rel_prl_rate::Int32    = 0     # relative proportion of peierls creep strainrate
+    out_rel_pl_rate::Int32     = 0     # relative proportion of plastic strainrate
+    out_plast_strain::Int32   = 0     # accumulated plastic strain
+    out_plast_dissip::Int32    = 0     # plastic dissipation
+    out_tot_displ::Int32       = 0
+    out_moment_res::Int32      = 0
+    out_cont_res::Int32        = 0
+    out_energ_res::Int32       = 0
+    out_melt_fraction::Int32   = 0
+    out_fluid_density::Int32   = 0
+    out_conductivity::Int32    = 0
+    out_vel_gr_tensor::Int32   = 0
+    out_avd::Int32     = 1 # activate AVD phase output
+	out_avd_pvd::Int32 = 1 # activate writing .pvd file
+	out_avd_ref::Int32 = 3 # AVD grid refinement factor
+end
+
+
+@kw_args struct Surf_Output
+    out_surf::Int32         = 0 # activate surface output
+    out_surf_pvd::Int32        = 0 # activate writing .pvd file
+    out_surf_velocity::Int32    = 0
+    out_surf_topography::Int32  = 0
+    out_surf_amplitude::Int32   = 0
+end
+
+@kw_args struct Passive_Tracers_Output
+    out_ptr::Int32              = 0    # activate  
+    out_ptr_ID::Int32           = 0    # ID of the passive tracers
+    out_ptr_phase::Int32        = 0    # phase of the passive tracers
+    out_ptr_Pressure::Int32     = 0    # interpolated pressure
+    out_ptr_Temperature::Int32  = 0    # temperature
+    out_ptr_MeltFraction::Int32 = 0    # melt fraction computed using P-T of the marker 
+    out_ptr_Active::Int32       = 0    # option that highlight the marker that are currently active
+    out_ptr_Grid_Mf::Int32      = 0    # option that allow to store the melt fraction seen within the cell 
+end
+
+@kw_args struct Phase_Aggregator
+    name::String     = "crust"  # phase aggregate output vector name
+    numPhase::Int32 = 3      # number of phases to aggregate
+    phaseID::Array{Int32}  = [1 5 15] # list of phase IDs to aggregate
 end
 
 
